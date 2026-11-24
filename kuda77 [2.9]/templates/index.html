@@ -1,0 +1,2176 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MosTrack — Навигатор по Замоскворецкой линии</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        :root {
+            --bg-dark: #0a0a0f;
+            --glass-bg: rgba(20, 20, 32, 0.84);
+            --glass-card: rgba(28, 28, 44, 0.76);
+            --glass-border: rgba(255, 255, 255, 0.11);
+            --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+            --accent-red: #f43f5e;
+            --accent-red-hover: #e11d48;
+            --user-cyan: #38bdf8;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background: var(--bg-dark); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; position: relative; }
+
+        .moscow-mask-layer path {
+            fill: url(#redHatch) !important;
+            fill-opacity: 0.88 !important;
+        }
+
+        .sidebar {
+            width: 455px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(28px) saturate(190%);
+            -webkit-backdrop-filter: blur(28px) saturate(190%);
+            border-right: 1px solid var(--glass-border);
+            box-shadow: 15px 0 40px rgba(0,0,0,0.6), var(--glass-highlight);
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+            transition: transform 0.35s cubic-bezier(0.33, 1, 0.68, 1), height 0.35s ease;
+        }
+
+        .header {
+            padding: 13px 18px;
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .logo-group { display: flex; align-items: center; gap: 8px; }
+        .logo-title { font-size: 21px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+        .logo-title span { color: var(--accent-red); }
+        .badge-line {
+            background: rgba(16, 185, 129, 0.18);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            font-size: 11px;
+            font-weight: 800;
+            padding: 3px 7px;
+            border-radius: 7px;
+        }
+
+        .header-right { display: flex; align-items: center; gap: 6px; }
+
+        .weather-pill {
+            background: rgba(56, 189, 248, 0.12);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            color: #e0f2fe;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 5px 9px;
+            border-radius: 20px;
+            white-space: nowrap;
+        }
+        .weather-pill.bad {
+            background: rgba(244, 63, 94, 0.16);
+            border-color: rgba(244, 63, 94, 0.35);
+            color: #fecdd3;
+        }
+
+        .account-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--glass-border);
+            color: #fff;
+            padding: 6px 11px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s;
+            max-width: 140px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .account-btn:hover { border-color: var(--accent-red); background: rgba(244, 63, 94, 0.14); }
+        .account-btn.admin { border-color: rgba(244, 63, 94, 0.6); background: rgba(244, 63, 94, 0.2); color: #fecdd3; }
+
+        .info-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            color: var(--text-muted);
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .info-btn:hover { color: #fff; border-color: var(--accent-red); }
+
+        .location-panel {
+            margin: 10px 16px 4px 16px;
+            background: var(--glass-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 11px 13px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.25), var(--glass-highlight);
+        }
+
+        .loc-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .custom-select, .search-input, .glass-input, .glass-textarea {
+            width: 100%;
+            background: rgba(14, 14, 22, 0.88);
+            color: #fff;
+            border: 1px solid var(--glass-border);
+            padding: 9px 11px;
+            border-radius: 9px;
+            font-size: 13px;
+            font-weight: 600;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .custom-select:focus, .search-input:focus, .glass-input:focus, .glass-textarea:focus { border-color: var(--accent-red); }
+        .glass-textarea { resize: vertical; min-height: 68px; font-weight: 500; }
+
+        .geo-btn,
+        .sheet-handle-bar,
+        .mobile-back-btn,
+        .mobile-detail-container {
+            display: none !important;
+        }
+
+        .filters {
+            padding: 8px 16px 10px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 9px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .filter-row { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+        .val-badge { color: var(--accent-red); font-weight: 800; }
+        input[type=range] { width: 100%; accent-color: var(--accent-red); margin-top: 3px; cursor: pointer; }
+
+        .toggles-row { display: flex; flex-direction: column; gap: 5px; }
+        .toggle-label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #cbd5e1; cursor: pointer; font-weight: 600; }
+        .toggle-label input { accent-color: var(--accent-red); cursor: pointer; width: 15px; height: 15px; }
+
+        /* БЛОК МНОГОВАРИАНТНОГО AI-КОНСТРУКТОРА */
+        .plan-box {
+            background: rgba(244, 63, 94, 0.08);
+            border: 1px solid rgba(244, 63, 94, 0.28);
+            border-radius: 13px;
+            padding: 9px;
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+        }
+        .plan-modes {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 5px;
+        }
+        .mode-btn {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--glass-border);
+            color: var(--text-muted);
+            padding: 5px 2px;
+            border-radius: 8px;
+            font-size: 10.5px;
+            font-weight: 700;
+            cursor: pointer;
+            text-align: center;
+        }
+        .mode-btn.active { background: var(--accent-red); border-color: var(--accent-red); color: #fff; }
+
+        .plan-btn-group { display: flex; gap: 6px; }
+        .plan-day-btn {
+            flex: 1;
+            background: linear-gradient(135deg, #f43f5e 0%, #9333ea 100%);
+            color: #fff;
+            border: none;
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            box-shadow: 0 6px 18px rgba(244, 63, 94, 0.35);
+        }
+        .plan-next-btn {
+            background: rgba(255,255,255,0.09);
+            border: 1px solid var(--glass-border);
+            color: #fff;
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .plan-next-btn:hover { background: rgba(255,255,255,0.18); border-color: var(--user-cyan); }
+
+        .chips-row { display: flex; gap: 6px; overflow-x: auto; padding: 8px 16px 3px 16px; scrollbar-width: none; }
+        .chips-row::-webkit-scrollbar { display: none; }
+        .chip-btn {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--glass-border);
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11.5px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .chip-btn.active { background: rgba(244, 63, 94, 0.22); border-color: var(--accent-red); color: #fff; }
+
+        .cards-list { flex: 1; overflow-y: auto; padding: 8px 16px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+        .card-item {
+            background: var(--glass-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 11px;
+            display: flex;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.25), var(--glass-highlight);
+        }
+        .card-item:hover { border-color: var(--accent-red); transform: translateY(-2px); }
+
+        .card-thumb { width: 84px; height: 84px; border-radius: 11px; object-fit: cover; background: #111118; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.08); }
+        .card-details { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+        .card-heading { font-size: 14px; font-weight: 700; color: #fff; line-height: 1.25; }
+        .card-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+        .mini-tag { font-size: 10.5px; font-weight: 600; padding: 3px 7px; border-radius: 7px; background: rgba(255,255,255,0.05); color: var(--text-muted); }
+        .tag-price { background: rgba(244, 63, 94, 0.15); color: var(--accent-red); }
+        .tag-time { background: rgba(56, 189, 248, 0.15); color: var(--user-cyan); }
+        .tag-pushkin { background: rgba(168, 85, 247, 0.2); color: #d8b4fe; }
+        .tag-closed { background: rgba(239, 68, 68, 0.22); color: #fca5a5; }
+        .tag-visited { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.35); }
+
+        .map-wrapper { flex: 1; position: relative; height: 100%; }
+        #map { width: 100%; height: 100%; background: #08080c; }
+
+        .map-pick-banner {
+            position: absolute;
+            top: 18px; left: 50%; transform: translateX(-50%);
+            z-index: 2500;
+            background: rgba(244, 63, 94, 0.94);
+            backdrop-filter: blur(12px);
+            color: #fff;
+            padding: 12px 22px;
+            border-radius: 14px;
+            font-weight: 800;
+            font-size: 14px;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.7);
+            display: none;
+            align-items: center;
+            gap: 14px;
+        }
+        .map-pick-banner.active { display: flex; }
+        .map-pick-cancel { background: rgba(0,0,0,0.3); border: none; color: #fff; padding: 5px 10px; border-radius: 8px; cursor: pointer; font-weight: 700; }
+
+        .bottom-details-panel {
+            position: absolute;
+            bottom: 24px; left: 24px; right: 24px;
+            max-height: 66vh;
+            background: var(--glass-bg);
+            backdrop-filter: blur(32px) saturate(200%);
+            -webkit-backdrop-filter: blur(32px) saturate(200%);
+            border: 1px solid var(--glass-border);
+            border-top: 3px solid var(--accent-red);
+            border-radius: 24px;
+            padding: 22px;
+            z-index: 998;
+            display: none;
+            flex-direction: column;
+            gap: 14px;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.85), var(--glass-highlight);
+            overflow-y: auto;
+        }
+        .bottom-details-panel.active { display: flex; }
+
+        .panel-top-section { display: flex; gap: 20px; align-items: flex-start; }
+        .panel-img { width: 260px; height: 175px; border-radius: 16px; object-fit: cover; background: #111118; border: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+        .panel-main { flex: 1; }
+        .panel-title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; padding-right: 36px; flex-wrap: wrap; }
+        .panel-title { font-size: 22px; font-weight: 800; color: #fff; }
+        .action-pill-btn {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--glass-border);
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .action-pill-btn:hover { background: rgba(255,255,255,0.14); }
+        .action-pill-btn.active-fav { background: rgba(244, 63, 94, 0.22); border-color: var(--accent-red); color: #fecdd3; }
+        .action-pill-btn.active-vis { background: rgba(16, 185, 129, 0.22); border-color: #10b981; color: #a7f3d0; }
+
+        .panel-desc { font-size: 13.5px; color: #cbd5e1; line-height: 1.55; margin-bottom: 10px; }
+
+        .route-legend-box { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--glass-border); border-radius: 12px; padding: 8px 12px; margin-bottom: 9px; }
+        .legend-title { font-size: 10.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; }
+        .legend-items { display: flex; gap: 14px; flex-wrap: wrap; }
+        .legend-item { display: flex; align-items: center; gap: 6px; color: #e2e8f0; font-size: 11.5px; font-weight: 600; }
+        .legend-dot { width: 14px; height: 4px; border-radius: 2px; }
+        .dot-blue { background: #38bdf8; }
+        .dot-green { background: #10b981; }
+        .dot-red { background: #f43f5e; }
+
+        .metro-navigation-box { background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 12px; padding: 11px 15px; font-size: 13px; line-height: 1.5; color: #fecdd3; }
+
+        .routes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .route-card { background: var(--glass-card); border: 1px solid var(--glass-border); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+        .route-card.walk { border-left: 4px solid var(--accent-red); }
+        .route-card.bus { border-left: 4px solid var(--user-cyan); }
+        .route-title { font-weight: 700; font-size: 13px; color: #fff; display: flex; justify-content: space-between; }
+        .route-cost { font-size: 12px; font-weight: 700; color: var(--user-cyan); }
+        .route-text { font-size: 12px; color: #94a3b8; line-height: 1.45; }
+
+        /* БЛОК ОТЗЫВОВ */
+        .reviews-section {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 12px 14px;
+            margin-top: 10px;
+        }
+        .reviews-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .rev-item { border-top: 1px solid var(--glass-border); padding: 8px 0; font-size: 12.5px; }
+
+        .day-plan-summary { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+        .summary-pill { background: rgba(255,255,255,0.06); border: 1px solid var(--glass-border); padding: 6px 12px; border-radius: 10px; font-size: 12.5px; font-weight: 700; }
+        .save-route-btn { background: #10b981; color: #fff; border: none; padding: 7px 14px; border-radius: 10px; font-size: 12.5px; font-weight: 800; cursor: pointer; }
+        .day-stops-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+        .day-stop-card { background: var(--glass-card); border: 1px solid var(--glass-border); border-radius: 14px; padding: 13px; display: flex; flex-direction: column; gap: 6px; }
+        .step-badge { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: var(--accent-red); color: #fff; font-weight: 800; font-size: 12px; border-radius: 50%; margin-right: 6px; }
+
+        .close-panel-btn { position: absolute; top: 16px; right: 16px; background: rgba(255,255,255,0.06); border: 1px solid var(--glass-border); border-radius: 50%; width: 34px; height: 34px; color: #fff; font-size: 15px; cursor: pointer; }
+        .close-panel-btn:hover { background: var(--accent-red); border-color: var(--accent-red); }
+
+        .user-pin-wrapper { position: relative; width: 26px; height: 26px; }
+        .user-pin-pulse { position: absolute; width: 100%; height: 100%; background: var(--user-cyan); border-radius: 50%; opacity: 0.8; animation: pulse-ring 2s infinite ease-out; }
+        .user-pin-core { position: absolute; top: 4px; left: 4px; width: 18px; height: 18px; background: var(--user-cyan); border: 3px solid #ffffff; border-radius: 50%; box-shadow: 0 0 16px var(--user-cyan); }
+        @keyframes pulse-ring { 0% { transform: scale(0.7); opacity: 1; } 100% { transform: scale(2.4); opacity: 0; } }
+
+        .train-icon { width: 32px; height: 32px; background: rgba(20,20,32,0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; border: 2px solid #10b981; }
+
+        /* ИДЕАЛЬНО ОТЦЕНТРОВАННЫЕ ЭМОДЗИ В ПИНАХ */
+        .place-pin {
+            width: 34px;
+            height: 34px;
+            background: rgba(28,28,44,0.92);
+            border: 2px solid var(--accent-red);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            line-height: 1;
+            padding-bottom: 2px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .step-pin {
+            width: 34px; height: 34px;
+            background: linear-gradient(135deg, #f43f5e, #9333ea);
+            border: 3px solid #ffffff; border-radius: 50%; color: #fff;
+            font-weight: 800; font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+            line-height: 1;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.76);
+            backdrop-filter: blur(12px);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-content {
+            background: var(--glass-bg);
+            backdrop-filter: blur(32px);
+            border: 1px solid var(--glass-border);
+            border-radius: 22px;
+            padding: 24px;
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.88), var(--glass-highlight);
+            position: relative;
+        }
+        .modal-content.wide { max-width: 980px; }
+
+        .modal-title { font-size: 20px; font-weight: 800; margin-bottom: 14px; color: #fff; padding-right: 36px; }
+        .modal-text { font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px; }
+        .modal-footer { font-size: 13px; font-weight: 700; color: var(--accent-red); border-top: 1px solid var(--glass-border); padding-top: 12px; }
+
+        .tabs-bar { display: flex; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid var(--glass-border); padding-bottom: 12px; margin-bottom: 16px; }
+        .tab-btn {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--glass-border);
+            color: var(--text-muted);
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .tab-btn.active { background: var(--accent-red); border-color: var(--accent-red); color: #fff; }
+
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+        .form-label { font-size: 12px; font-weight: 700; color: var(--text-muted); }
+
+        .btn-primary { background: var(--accent-red); color: #fff; border: none; padding: 11px 18px; border-radius: 10px; font-weight: 800; font-size: 13.5px; cursor: pointer; }
+        .btn-primary:hover { background: var(--accent-red-hover); }
+        .btn-secondary { background: rgba(255,255,255,0.08); color: #fff; border: 1px solid var(--glass-border); padding: 8px 13px; border-radius: 10px; font-weight: 700; font-size: 13px; cursor: pointer; }
+        .btn-cyan { background: rgba(56, 189, 248, 0.16); color: var(--user-cyan); border: 1px solid rgba(56, 189, 248, 0.4); padding: 9px 14px; border-radius: 10px; font-weight: 700; font-size: 13px; cursor: pointer; }
+        .btn-green { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.4); padding: 7px 12px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; }
+        .btn-danger { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4); padding: 7px 12px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; }
+
+        .admin-list-item { background: var(--glass-card); border: 1px solid var(--glass-border); border-radius: 12px; padding: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+        .sql-table-wrap { overflow-x: auto; max-height: 46vh; border: 1px solid var(--glass-border); border-radius: 12px; }
+        table.sql-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        table.sql-table th { background: rgba(255,255,255,0.08); color: #fff; text-align: left; padding: 9px 10px; position: sticky; top: 0; }
+        table.sql-table td { border-top: 1px solid var(--glass-border); padding: 8px 10px; color: #cbd5e1; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* ВСПЛЫВАЮЩИЙ БАННЕР ПРЕДЛОЖЕНИЯ АВТОРИЗАЦИИ (WELCOME TOAST) */
+        .welcome-toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 2200;
+            background: var(--glass-bg);
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(244, 63, 94, 0.4);
+            border-left: 5px solid var(--accent-red);
+            border-radius: 16px;
+            padding: 16px 20px;
+            max-width: 360px;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.7);
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .welcome-toast.active { display: flex; animation: slideInToast 0.4s ease; }
+        @keyframes slideInToast { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            .sheet-handle-bar { display: block !important; width: 46px; height: 5px; background: rgba(255,255,255,0.35); border-radius: 10px; margin: 10px auto 4px auto; cursor: pointer; }
+            .geo-btn { display: flex !important; background: rgba(56, 189, 248, 0.15); color: var(--user-cyan); border: 1px solid rgba(56, 189, 248, 0.3); padding: 9px; border-radius: 10px; font-weight: 700; font-size: 13px; cursor: pointer; align-items: center; justify-content: center; gap: 8px; }
+            .sidebar { position: fixed; bottom: 0; left: 0; right: 0; width: 100%; height: 240px; max-height: 80vh; border-radius: 26px 26px 0 0; border-right: none; border-top: 1px solid var(--glass-border); z-index: 1000; }
+            .sidebar.sheet-expanded { height: 78vh !important; }
+            .sidebar.sheet-details { height: 44vh !important; }
+            .bottom-details-panel { display: none !important; }
+            .mobile-detail-container.active { display: flex !important; flex-direction: column; gap: 10px; padding: 12px 18px 24px 18px; overflow-y: auto; height: 100%; }
+            .mobile-back-btn { display: inline-flex !important; background: rgba(255,255,255,0.06); border: 1px solid var(--glass-border); color: #fff; padding: 7px 12px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer; align-items: center; gap: 6px; align-self: flex-start; }
+            .mobile-detail-header { display: flex; gap: 12px; align-items: center; }
+            .mobile-detail-img { width: 70px; height: 70px; border-radius: 12px; object-fit: cover; border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
+            .routes-grid, .form-grid { grid-template-columns: 1fr; }
+            .welcome-toast { bottom: 10px; right: 10px; left: 10px; max-width: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar" id="sidebar">
+        <div class="sheet-handle-bar" onclick="toggleMobileSheet()"></div>
+        
+        <div class="header">
+            <div class="logo-group">
+                <div class="logo-title" id="siteTitleLogo">Mos<span>Track</span></div>
+                <span class="badge-line">Линия 2</span>
+            </div>
+            <div class="header-right">
+                <div class="weather-pill" id="weatherPill">&#9925; ...</div>
+                <button class="account-btn" id="accountBtn" onclick="openAccountModal()">&#128100; Войти</button>
+                <button class="info-btn" onclick="openInfoModal()" title="О системе">&#8505;&#65039;</button>
+            </div>
+        </div>
+
+        <div id="mainSheetContent" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+            <div class="location-panel">
+                <div class="loc-label">
+                    <span>Ваше местоположение</span>
+                    <span style="color: var(--accent-red);">Зелёная ветка</span>
+                </div>
+                <select class="custom-select" id="stationSelect" onchange="onStationChanged()"></select>
+                <button class="geo-btn" onclick="getUserLocation()">
+                    <span>&#128205;</span>
+                    <span>Моя геопозиция (GPS)</span>
+                </button>
+            </div>
+
+            <div class="filters">
+                <input type="text" class="search-input" id="searchInput" placeholder="&#128269; Поиск мест: царицыно, кремль, парк, третьяковка...">
+
+                <div>
+                    <div class="filter-row">
+                        <span>Максимальный бюджет (на вход)</span>
+                        <span class="val-badge" id="budgetValue">1000 &#8381;</span>
+                    </div>
+                    <input type="range" id="budgetInput" min="0" max="5000" step="50" value="1000">
+                </div>
+
+                <div>
+                    <div class="filter-row">
+                        <span>Свободное время</span>
+                        <span class="val-badge" id="timeValue">4 ч.</span>
+                    </div>
+                    <input type="range" id="timeInput" min="1" max="12" step="0.5" value="4">
+                </div>
+
+                <div class="toggles-row">
+                    <label class="toggle-label"><input type="checkbox" id="pushkinToggle"> &#128179; Пушкинская карта (24 места на ветке)</label>
+                    <label class="toggle-label"><input type="checkbox" id="studentToggle"> &#127891; Льгота «Студент / Школьник»</label>
+                    <label class="toggle-label"><input type="checkbox" id="indoorToggle"> &#127968; Только в помещении (от дождя/холода)</label>
+                </div>
+
+                <!-- БЛОК СТИЛЕЙ МАРШРУТА ДНЯ -->
+                <div class="plan-box">
+                    <div class="plan-modes">
+                        <button class="mode-btn active" id="modeBalanced" onclick="setPlanMode('balanced', this)">Баланс</button>
+                        <button class="mode-btn" id="modeCulture" onclick="setPlanMode('culture', this)">🏛️ Музеи</button>
+                        <button class="mode-btn" id="modeParks" onclick="setPlanMode('parks', this)">🌳 Парки</button>
+                        <button class="mode-btn" id="modeSurprise" onclick="setPlanMode('surprise', this)">🎲 Микс</button>
+                    </div>
+                    <div class="plan-btn-group">
+                        <button class="plan-day-btn" onclick="generateDayPlan(false)">
+                            <span>&#10024;</span><span>Собрать маршрут дня</span>
+                        </button>
+                        <button class="plan-next-btn" title="Собрать другой уникальный вариант" onclick="generateDayPlan(true)">
+                            🔄 Другой
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chips-row" id="chipsRow">
+                <button class="chip-btn active" onclick="setCategory('all', this)">Все (54)</button>
+                <button class="chip-btn" onclick="setCategory('Парк', this)">&#127795; Парки</button>
+                <button class="chip-btn" onclick="setCategory('Музей', this)">&#127963; Музеи</button>
+                <button class="chip-btn" onclick="setCategory('Культура', this)">&#127917; Театры</button>
+                <button class="chip-btn" onclick="setCategory('История', this)">&#127984; История</button>
+                <button class="chip-btn" onclick="setCategory('Еда', this)">&#127828; Еда</button>
+            </div>
+
+            <div class="cards-list" id="cardsContainer"></div>
+        </div>
+
+        <!-- Компактное окно деталей на мобилке -->
+        <div class="mobile-detail-container" id="mobileDetailContainer">
+            <button class="mobile-back-btn" onclick="closeMobileDetail()">&#8592; Назад к списку</button>
+            <div id="mobSinglePlaceContent">
+                <div class="mobile-detail-header">
+                    <img class="mobile-detail-img" id="mobPanelImg" src="" alt="Фото" referrerpolicy="no-referrer">
+                    <div style="flex:1;">
+                        <div style="font-size: 15px; font-weight: 800; color: #fff; line-height: 1.2;" id="mobPanelTitle">Название</div>
+                        <div style="font-size: 12px; font-weight: 700; color: var(--accent-red); margin-top: 3px;">
+                            &#127915; <span id="mobPanelTicket">0 &#8381;</span>
+                        </div>
+                        <div style="display:flex; gap:6px; margin-top:6px;">
+                            <button class="action-pill-btn" id="mobFavBtn" onclick="toggleCurrentFav()">&#9825; Избранное</button>
+                            <button class="action-pill-btn" id="mobVisBtn" onclick="toggleCurrentVisited()">&#9989; Я здесь был</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="metro-navigation-box" style="margin-top: 8px; padding: 9px 12px; font-size: 12px;">
+                    &#128647; <span id="mobMetroNavText">Загрузка...</span>
+                </div>
+                <div class="panel-desc" style="font-size: 12px; margin: 6px 0;" id="mobPanelDesc">Описание...</div>
+                <div class="routes-grid">
+                    <div class="route-card walk" style="padding: 8px;">
+                        <div class="route-title"><span>&#128694; Пешком</span><span class="route-cost" id="mobWalkCost">0 &#8381;</span></div>
+                        <div class="route-text" style="font-size: 11px;" id="mobPanelWalkInfo">...</div>
+                    </div>
+                    <div class="route-card bus" style="padding: 8px;">
+                        <div class="route-title"><span>&#128652; Транспорт</span><span class="route-cost" id="mobBusCost">0 &#8381;</span></div>
+                        <div class="route-text" style="font-size: 11px;" id="mobPanelBusInfo">...</div>
+                    </div>
+                </div>
+            </div>
+            <div id="mobDayPlanContent" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Область карты -->
+    <div class="map-wrapper">
+        <div class="map-pick-banner" id="mapPickBanner">
+            <span>&#128205; Кликните на карту в точку главного входа</span>
+            <button class="map-pick-cancel" onclick="cancelMapPick()">Отмена</button>
+        </div>
+
+        <div id="map"></div>
+
+        <!-- Выдвижная панель на ПК -->
+        <div class="bottom-details-panel" id="bottomPanel">
+            <button class="close-panel-btn" onclick="closePanel()">&#10005;</button>
+            
+            <div id="pcSinglePlaceContent">
+                <div class="panel-top-section">
+                    <img class="panel-img" id="panelImg" src="" alt="Фото" referrerpolicy="no-referrer">
+                    <div class="panel-main">
+                        <div class="panel-title-row">
+                            <div class="panel-title" id="panelTitle">Название места</div>
+                            <div style="display:flex; gap:8px;">
+                                <button class="action-pill-btn" id="pcFavBtn" onclick="toggleCurrentFav()">&#9825; В избранное</button>
+                                <button class="action-pill-btn" id="pcVisBtn" onclick="toggleCurrentVisited()">&#9989; Я здесь был(а)</button>
+                            </div>
+                        </div>
+                        <div class="route-legend-box">
+                            <div class="legend-title">Обозначения на карте (Замоскворецкая линия):</div>
+                            <div class="legend-items">
+                                <span class="legend-item"><span class="legend-dot dot-blue"></span> От вас до метро</span>
+                                <span class="legend-item"><span class="legend-dot dot-green"></span> Поезд по зелёной ветке</span>
+                                <span class="legend-item"><span class="legend-dot dot-red"></span> Пешком от метро до входа</span>
+                            </div>
+                        </div>
+                        <div class="panel-desc" id="panelDesc">Описание...</div>
+                        <div style="font-size: 14px; font-weight: 700; color: var(--accent-red); margin-bottom: 8px;">
+                            &#127915; Входной билет: <span id="panelTicket">0 &#8381;</span>
+                        </div>
+                        <div class="metro-navigation-box">
+                            &#128647; <strong>Маршрут:</strong> <span id="metroNavText">Загрузка...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="routes-grid" style="margin-top: 10px;">
+                    <div class="route-card walk">
+                        <div class="route-title"><span>&#128694; Пешком от выхода метро</span><span class="route-cost" id="walkCost">0 &#8381;</span></div>
+                        <div class="route-text" id="panelWalkInfo">...</div>
+                    </div>
+                    <div class="route-card bus">
+                        <div class="route-title"><span>&#128652; Наземный транспорт</span><span class="route-cost" id="busCost">0 &#8381;</span></div>
+                        <div class="route-text" id="panelBusInfo">...</div>
+                    </div>
+                </div>
+
+                <!-- Блок живых отзывов пользователей -->
+                <div class="reviews-section" id="reviewsSection">
+                    <div class="reviews-header">
+                        <span style="font-weight:800; font-size:13.5px;">💬 Советы и отзывы посетителей</span>
+                        <span style="font-size:12px; color:var(--text-muted);" id="revRatingBadge">⭐ 5.0</span>
+                    </div>
+                    <div id="reviewsList" style="max-height:130px; overflow-y:auto; margin-bottom:8px;"></div>
+                    <div style="display:flex; gap:8px;">
+                        <select class="custom-select" id="newRevRating" style="width:110px;">
+                            <option value="5">⭐⭐⭐⭐⭐</option>
+                            <option value="4">⭐⭐⭐⭐</option>
+                            <option value="3">⭐⭐⭐</option>
+                        </select>
+                        <input type="text" class="glass-input" id="newRevText" placeholder="Напишите совет или отзыв..." style="flex:1;">
+                        <button class="btn-cyan" onclick="submitReview()">Отправить</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Режим 2: Маршрут дня -->
+            <div id="pcDayPlanContent" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- ВСПЛЫВАЮЩИЙ ТОАСТ-ПРИГЛАШЕНИЕ К АВТОРИЗАЦИИ ПРИ ВХОДЕ -->
+    <div class="welcome-toast" id="welcomeToast">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong style="font-size:14px; color:#fff;">👋 Добро пожаловать!</strong>
+            <button onclick="dismissWelcomeToast()" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer;">✕</button>
+        </div>
+        <div style="font-size:12.5px; color:#cbd5e1; line-height:1.45;">
+            Войдите в профиль, чтобы сохранять маршруты, отмечать посещённые места и копить достижения исследователя Москвы.
+        </div>
+        <div style="display:flex; gap:8px;">
+            <button class="btn-primary" style="flex:1; padding:7px 10px; font-size:12px;" onclick="openAccountModal(); dismissWelcomeToast();">Войти / Регистрация</button>
+            <button class="btn-secondary" style="padding:7px 10px; font-size:12px;" onclick="dismissWelcomeToast()">Позже</button>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА 1: ИНФОРМАЦИЯ О ПРОЕКТЕ -->
+    <div class="modal-overlay" id="infoModal">
+        <div class="modal-content">
+            <button class="close-panel-btn" onclick="closeInfoModal()">&#10005;</button>
+            <div class="modal-title" id="infoModalTitle">О проекте MosTrack</div>
+            <div class="modal-text" id="infoModalText">
+                Интерактивный навигатор по достопримечательностям вдоль Замоскворецкой линии Москвы с расчётом времени в пути, бюджета и льгот.
+            </div>
+            <div class="modal-footer">
+                Индивидуальный проект 10 класса | Автор: Косенков Василий
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА 2: АККАУНТ, ДОСТИЖЕНИЯ И ЛИЧНЫЙ КАБИНЕТ -->
+    <div class="modal-overlay" id="accountModal">
+        <div class="modal-content">
+            <button class="close-panel-btn" onclick="closeAccountModal()">&#10005;</button>
+            <div class="modal-title" id="accModalTitle">&#128100; Личный кабинет</div>
+
+            <div id="authSection">
+                <div class="tabs-bar">
+                    <button class="tab-btn active" id="tabLoginBtn" onclick="switchAuthTab('login')">Вход</button>
+                    <button class="tab-btn" id="tabRegBtn" onclick="switchAuthTab('reg')">Регистрация</button>
+                </div>
+                <div id="loginForm">
+                    <div class="form-group">
+                        <label class="form-label">Логин</label>
+                        <input type="text" class="glass-input" id="loginUsername" placeholder="admin или student">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Пароль</label>
+                        <input type="password" class="glass-input" id="loginPassword" placeholder="••••••••">
+                    </div>
+                    <button class="btn-primary" style="width:100%; margin-top:6px;" onclick="doLogin()">Войти в аккаунт</button>
+                    <div style="font-size:12px; color:var(--text-muted); margin-top:10px; background:rgba(255,255,255,0.04); padding:10px; border-radius:10px;">
+                        &#128273; <strong>Разработчик:</strong> <code>admin</code> / <code>admin123</code><br>
+                        &#127891; <strong>Пользователь:</strong> <code>student</code> / <code>12345</code>
+                    </div>
+                </div>
+                <div id="regForm" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">Логин (от 3 символов)</label>
+                        <input type="text" class="glass-input" id="regUsername" placeholder="alexey_msk">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Имя / Никнейм</label>
+                        <input type="text" class="glass-input" id="regDisplayName" placeholder="Алексей">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Пароль (от 4 символов)</label>
+                        <input type="password" class="glass-input" id="regPassword" placeholder="••••">
+                    </div>
+                    <button class="btn-primary" style="width:100%; margin-top:6px;" onclick="doRegister()">Зарегистрироваться</button>
+                </div>
+            </div>
+
+            <!-- Профиль с достижениями -->
+            <div id="profileSection" style="display:none;">
+                <!-- БЕЙДЖ РАНГА ИССЛЕДОВАТЕЛЯ -->
+                <div style="background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:14px; padding:12px 14px; margin-bottom:12px; display:flex; align-items:center; gap:12px;">
+                    <div style="font-size:30px;">🏅</div>
+                    <div style="flex:1;">
+                        <div style="font-size:11px; text-transform:uppercase; color:var(--user-cyan); font-weight:800;">Звание исследователя</div>
+                        <div style="font-size:16px; font-weight:800; color:#fff;" id="userRankTitle">Новичок ветки</div>
+                        <div style="font-size:11.5px; color:#cbd5e1; margin-top:2px;">Посещено: <span id="userVisitedCount">0</span> из 54 мест Замоскворецкой линии</div>
+                    </div>
+                </div>
+
+                <div class="tabs-bar">
+                    <button class="tab-btn active" id="pTabProf" onclick="switchProfileTab('prof')">Профиль</button>
+                    <button class="tab-btn" id="pTabFavs" onclick="switchProfileTab('favs')">&#10084;&#65039; Избранное</button>
+                    <button class="tab-btn" id="pTabVisited" onclick="switchProfileTab('visited')">✅ Посещённые</button>
+                    <button class="tab-btn" id="pTabRoutes" onclick="switchProfileTab('routes')">&#128506; Маршруты</button>
+                </div>
+
+                <div id="profTabContent">
+                    <div id="adminEntryWrap" style="display:none; margin-bottom:14px;">
+                        <button class="plan-day-btn" style="background:linear-gradient(135deg,#e11d48,#f43f5e);" onclick="openAdminPanel()">
+                            &#9889; Открыть Панель разработчика (CMS / SQL)
+                        </button>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Отображаемое имя</label>
+                        <input type="text" class="glass-input" id="profDisplayName">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Домашняя станция метро</label>
+                        <select class="custom-select" id="profHomeStation"></select>
+                    </div>
+                    <label class="toggle-label" style="margin-bottom:8px;">
+                        <input type="checkbox" id="profIsStudent"> &#127891; Льгота «Студент / Школьник»
+                    </label>
+                    <label class="toggle-label" style="margin-bottom:14px;">
+                        <input type="checkbox" id="profHasPushkin"> &#128179; У меня есть «Пушкинская карта»
+                    </label>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <button class="btn-primary" style="flex:1;" onclick="saveProfile()">&#128190; Сохранить</button>
+                        <button class="btn-cyan" onclick="openPlaceEditorForSuggest()">&#128161; Предложить место</button>
+                        <button class="btn-danger" onclick="doLogout()">Выйти</button>
+                    </div>
+                </div>
+
+                <div id="favsTabContent" style="display:none; max-height:48vh; overflow-y:auto;"></div>
+                <div id="visitedTabContent" style="display:none; max-height:48vh; overflow-y:auto;"></div>
+                <div id="routesTabContent" style="display:none; max-height:48vh; overflow-y:auto;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА 3: РАСШИРЕННАЯ ПАНЕЛЬ РАЗРАБОТЧИКА (CMS + МОДЕРАЦИЯ + НАСТРОЙКИ + SQL) -->
+    <div class="modal-overlay" id="adminModal">
+        <div class="modal-content wide">
+            <button class="close-panel-btn" onclick="closeAdminPanel()">&#10005;</button>
+            <div class="modal-title">&#9889; Панель разработчика MosTrack</div>
+
+            <div class="tabs-bar">
+                <button class="tab-btn active" id="aTabPlaces" onclick="switchAdminTab('places')">&#128205; Все места ветки (<span id="adminTotalPlaces">0</span>)</button>
+                <button class="tab-btn" id="aTabMod" onclick="switchAdminTab('mod')">&#128737;&#65039; Модерация (<span id="pendingBadge">0</span>)</button>
+                <button class="tab-btn" id="aTabSettings" onclick="switchAdminTab('settings')">&#9881;&#65039; Настройки и Демо-погода</button>
+                <button class="tab-btn" id="aTabSql" onclick="switchAdminTab('sql')">&#128452;&#65039; 7 SQL-Таблиц</button>
+            </div>
+
+            <!-- Вкладка 1: Управление местами -->
+            <div id="adminPlacesTab">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
+                    <input type="text" class="search-input" id="adminSearch" style="max-width:320px;" placeholder="Поиск по местам..." oninput="renderAdminPlacesList()">
+                    <button class="btn-primary" onclick="openPlaceEditor(null)">&#10133; Добавить новое место</button>
+                </div>
+                <div id="adminPlacesList" style="max-height:52vh; overflow-y:auto;"></div>
+            </div>
+
+            <!-- Вкладка 2: Модерация -->
+            <div id="adminModTab" style="display:none; max-height:55vh; overflow-y:auto;"></div>
+
+            <!-- Вкладка 3: Живые настройки и погода -->
+            <div id="adminSettingsTab" style="display:none;">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Стоимость проезда в метро (&#8381;)</label>
+                        <input type="number" class="glass-input" id="setMetroFare">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Стоимость проезда на автобусе (&#8381;)</label>
+                        <input type="number" class="glass-input" id="setBusFare">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Источник погоды (или Демо-режим для защиты)</label>
+                    <select class="custom-select" id="setWeatherSource">
+                        <option value="open_meteo">&#127780;&#65039; Open-Meteo API (реальная погода в Москве)</option>
+                        <option value="wttr">&#127760; wttr.in API (резервный сервер)</option>
+                        <option value="demo_rain">&#127783;&#65039; Демо-режим: Идёт дождь (+11&#176;C, авто-режим зала)</option>
+                        <option value="demo_snow">&#10052;&#65039; Демо-режим: Сильный мороз и снег (-14&#176;C)</option>
+                        <option value="demo_clear">&#9728;&#65039; Демо-режим: Солнечно (+19&#176;C)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Название сайта в интерфейсе</label>
+                    <input type="text" class="glass-input" id="setSiteTitle">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Текст о проекте (окно информации)</label>
+                    <textarea class="glass-textarea" id="setWelcomeText"></textarea>
+                </div>
+                <button class="btn-primary" onclick="saveAdminSettings()">&#128190; Сохранить настройки в базу</button>
+            </div>
+
+            <!-- Вкладка 4: SQL Инспектор -->
+            <div id="adminSqlTab" style="display:none;">
+                <div style="display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px;">
+                    <button class="btn-secondary" onclick="loadSqlTable('places')">places (места)</button>
+                    <button class="btn-secondary" onclick="loadSqlTable('users')">users (аккаунты)</button>
+                    <button class="btn-secondary" onclick="loadSqlTable('favorites')">favorites (избранное)</button>
+                    <button class="btn-secondary" onclick="loadSqlTable('visited_places')">visited_places (чек-ины)</button>
+                    <button class="btn-secondary" onclick="loadSqlTable('reviews')">reviews (отзывы)</button>
+                    <button class="btn-secondary" onclick="loadSqlTable('saved_routes')">saved_routes (маршруты)</button>
+                    <button class="btn-secondary" onclick="loadSqlTable('site_settings')">site_settings (настройки)</button>
+                </div>
+                <div class="sql-table-wrap" id="sqlTableWrap"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА 4: РАСШИРЕННЫЙ РЕДАКТОР / ДОБАВЛЕНИЕ МЕСТА С ВЫБОРОМ НА КАРТЕ -->
+    <div class="modal-overlay" id="editorModal">
+        <div class="modal-content wide" style="max-width:720px;">
+            <button class="close-panel-btn" onclick="closeEditorModal()">&#10005;</button>
+            <div class="modal-title" id="editorModalTitle">Добавить место</div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Название объекта *</label>
+                    <input type="text" class="glass-input" id="edTitle" placeholder="Музей, парк или театр...">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Категория</label>
+                    <select class="custom-select" id="edCategory">
+                        <option value="Парк">Парк</option>
+                        <option value="Музей">Музей</option>
+                        <option value="Культура">Культура / Театр</option>
+                        <option value="История">История</option>
+                        <option value="Архитектура">Архитектура</option>
+                        <option value="Прогулка">Прогулка</option>
+                        <option value="Обзор">Обзорная точка</option>
+                        <option value="Еда">Еда / Фудмолл</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Выбор точки кликом по карте -->
+            <div style="background:rgba(255,255,255,0.04); border:1px solid var(--glass-border); border-radius:12px; padding:10px 14px; margin-bottom:12px; display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+                <div class="form-group" style="flex:1; min-width:130px; margin-bottom:0;">
+                    <label class="form-label">Широта (lat)</label>
+                    <input type="number" step="0.0001" class="glass-input" id="edLat" value="55.7558">
+                </div>
+                <div class="form-group" style="flex:1; min-width:130px; margin-bottom:0;">
+                    <label class="form-label">Долгота (lng)</label>
+                    <input type="number" step="0.0001" class="glass-input" id="edLng" value="37.6173">
+                </div>
+                <button type="button" class="btn-cyan" onclick="startMapPick()">&#128205; Выбрать кликом на карте</button>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Станция метро (Замоскворецкая линия)</label>
+                    <select class="custom-select" id="edMetro"></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Время на осмотр (часы, напр. 0.6)</label>
+                    <input type="number" step="0.1" min="0.2" class="glass-input" id="edTime" value="0.6">
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Стандартный билет (&#8381;)</label>
+                    <input type="number" class="glass-input" id="edPriceAdult" value="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Льготный / Студент (&#8381;)</label>
+                    <input type="number" class="glass-input" id="edPriceStudent" value="0">
+                </div>
+            </div>
+
+            <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:12px; background:rgba(255,255,255,0.04); padding:10px 12px; border-radius:12px;">
+                <label class="toggle-label"><input type="checkbox" id="edPushkin"> &#128179; Пушкинская карта (вход 0 &#8381;)</label>
+                <label class="toggle-label"><input type="checkbox" id="edIndoor"> &#127968; В помещении (крытое)</label>
+                <label class="toggle-label"><input type="checkbox" id="edClosedMon"> Выходной день — Понедельник</label>
+            </div>
+
+            <!-- Фотография и предпросмотр -->
+            <div class="form-group">
+                <label class="form-label">Фотография (URL или загрузка файла с ПК)</label>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <input type="text" class="glass-input" id="edImageUrl" style="flex:1;" placeholder="https://... или /static/uploads/..." oninput="updateEditorImgPreview()">
+                    <label class="btn-secondary" style="cursor:pointer;">
+                        &#128228; Файл с ПК
+                        <input type="file" accept="image/*" style="display:none;" onchange="uploadPlacePhoto(this)">
+                    </label>
+                </div>
+                <img id="edImgPreview" src="" alt="Превью" referrerpolicy="no-referrer" style="width:160px; height:100px; object-fit:cover; border-radius:12px; margin-top:8px; display:none; border:1px solid var(--glass-border);">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Описание места</label>
+                <textarea class="glass-textarea" id="edDesc" placeholder="Чем интересно это место, что посмотреть..."></textarea>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Пеший маршрут (номера выходов метро, улицы)</label>
+                    <input type="text" class="glass-input" id="edWalkInfo" placeholder="Выход №2, прямо по аллее 5 минут...">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Наземный транспорт и номера автобусов</label>
+                    <input type="text" class="glass-input" id="edBusInfo" placeholder="Автобусы м1, т36 до остановки...">
+                </div>
+            </div>
+
+            <button class="btn-primary" style="width:100%; margin-top:6px;" id="edSubmitBtn" onclick="submitEditorForm()">&#128190; Сохранить место</button>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const EMOJI = {
+            metro: '\uD83D\uDE87', tree: '\uD83C\uDF33', museum: '\uD83C\uDFDB',
+            food: '\uD83C\uDF54', theatre: '\uD83C\uDFAD', castle: '\uD83C\uDFEF',
+            pin: '\uD83D\uDCCD', card: '\uD83D\uDCB3', time: '\u23F1',
+            ruble: '\u20BD', walk: '\uD83D\uDEB6', bus: '\uD83D\uDE8C',
+            spark: '\u2728', house: '\uD83C\uDFE0', user: '\uD83D\uDC64',
+            heartFull: '\u2764\uFE0F', heartEmpty: '\u2661', check: '\u2705', star: '\u2B50'
+        };
+
+        function escapeXml(unsafe) {
+            return (unsafe || '').replace(/[<>&'"]/g, c => ({
+                '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;'
+            }[c]));
+        }
+
+        function getSvgPlaceholder(title, categoryIcon) {
+            const cleanTitle = escapeXml((title || 'MosTrack').substring(0, 26));
+            const icon = escapeXml(categoryIcon || EMOJI.museum);
+            return `data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22260%22%20viewBox%3D%220%200%20400%20260%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%23161622%22%2F%3E%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%232b1320%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20fill%3D%22url(%23g)%22%20width%3D%22400%22%20height%3D%22260%22%20rx%3D%2214%22%2F%3E%3Ccircle%20cx%3D%22200%22%20cy%3D%2295%22%20r%3D%2244%22%20fill%3D%22rgba(244%2C63%2C94%2C0.14)%22%20stroke%3D%22%23f43f5e%22%20stroke-width%3D%222%22%2F%3E%3Ctext%20x%3D%22200%22%20y%3D%22106%22%20font-size%3D%2236%22%20text-anchor%3D%22middle%22%3E${icon}%3C%2Ftext%3E%3Ctext%20fill%3D%22%23f8fafc%22%20font-family%3D%22sans-serif%22%20font-size%3D%2217%22%20font-weight%3D%22bold%22%20text-anchor%3D%22middle%22%20x%3D%22200%22%20y%3D%22180%22%3E${cleanTitle}%3C%2Ftext%3E%3Ctext%20fill%3D%22%23f43f5e%22%20font-family%3D%22sans-serif%22%20font-size%3D%2213%22%20font-weight%3D%22600%22%20text-anchor%3D%22middle%22%20x%3D%22200%22%20y%3D%22210%22%3EMosTrack%20%E2%80%A2%20%D0%9C%D0%BE%D1%81%D0%BA%D0%B2%D0%B0%3C%2Ftext%3E%3C%2Fsvg%3E`;
+        }
+
+        function openInfoModal() { document.getElementById('infoModal').classList.add('active'); }
+        function closeInfoModal() { document.getElementById('infoModal').classList.remove('active'); }
+
+        function toggleMobileSheet() {
+            if (window.innerWidth <= 768) {
+                const sb = document.getElementById('sidebar');
+                if (sb.classList.contains('sheet-details')) closeMobileDetail();
+                else sb.classList.toggle('sheet-expanded');
+            }
+        }
+
+        // ГЛОБАЛЬНОЕ СОСТОЯНИЕ
+        let zamoskvoretskayaStations = [];
+        let currentStationName = "Красногвардейская";
+        let userCoords = [55.6142, 37.7450];
+        let activeCategory = "all";
+        let planMode = "balanced";
+        let planVariant = 0;
+        let appConfig = { site_title: "MosTrack", metro_fare: 87, bus_fare: 80 };
+        let currentUser = null;
+        let currentFavIds = new Set();
+        let currentVisitedIds = new Set();
+        let currentSavedRoutes = [];
+        let currentSelectedPlace = null;
+        let currentDayPlan = null;
+
+        let isMapPicking = false;
+        let editorMode = 'admin_create';
+        let editingPlaceId = null;
+        let adminPlacesCache = [];
+
+        let map = L.map('map', { attributionControl: false, zoomControl: true }).setView(userCoords, 12);
+        const mainTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19, attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
+
+        mainTileLayer.on('tileerror', function(error) {
+            const c = error.coords;
+            if (error.tile && !error.tile._retried) {
+                error.tile._retried = true;
+                error.tile.src = `https://a.tile.openstreetmap.fr/osmfr/${c.z}/${c.x}/${c.y}.png`;
+            }
+        });
+
+        // КЛИК ПО КАРТЕ ПРИ ВЫБОРЕ КООРДИНАТ
+        map.on('click', function(e) {
+            if (!isMapPicking) return;
+            const lat = e.latlng.lat.toFixed(4);
+            const lng = e.latlng.lng.toFixed(4);
+            document.getElementById('edLat').value = lat;
+            document.getElementById('edLng').value = lng;
+
+            if (zamoskvoretskayaStations.length > 0) {
+                let nearest = zamoskvoretskayaStations[0], minD = Infinity;
+                zamoskvoretskayaStations.forEach(st => {
+                    const d = Math.hypot(st.lat - e.latlng.lat, st.lng - e.latlng.lng);
+                    if (d < minD) { minD = d; nearest = st; }
+                });
+                document.getElementById('edMetro').value = nearest.name;
+            }
+
+            isMapPicking = false;
+            document.getElementById('mapPickBanner').classList.remove('active');
+            document.getElementById('editorModal').classList.add('active');
+        });
+
+        function startMapPick() {
+            isMapPicking = true;
+            document.getElementById('editorModal').classList.remove('active');
+            document.getElementById('mapPickBanner').classList.add('active');
+        }
+
+        function cancelMapPick() {
+            isMapPicking = false;
+            document.getElementById('mapPickBanner').classList.remove('active');
+            document.getElementById('editorModal').classList.add('active');
+        }
+
+        function applyMaskToMap(geo) {
+            const worldOuter = [[90, -180], [90, 180], [-90, 180], [-90, -180]];
+            let maskRings = [worldOuter];
+            if (geo.type === 'Polygon') maskRings.push(geo.coordinates[0].map(c => [c[1], c[0]]));
+            else if (geo.type === 'MultiPolygon') geo.coordinates.forEach(poly => maskRings.push(poly[0].map(c => [c[1], c[0]])));
+
+            const maskLayer = L.polygon(maskRings, {
+                className: 'moscow-mask-layer', color: '#f43f5e', weight: 2, dashArray: '6, 8',
+                fillColor: '#1c0409', fillOpacity: 0.88, interactive: false
+            }).addTo(map);
+
+            function setupPattern() {
+                const svg = map.getPanes().overlayPane.querySelector('svg');
+                if (svg) {
+                    let defs = svg.querySelector('defs');
+                    if (!defs) { defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'); svg.insertBefore(defs, svg.firstChild); }
+                    if (!document.getElementById('redHatch')) {
+                        const pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+                        pattern.setAttribute('id', 'redHatch'); pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+                        pattern.setAttribute('width', '12'); pattern.setAttribute('height', '12');
+                        pattern.setAttribute('patternTransform', 'rotate(45)');
+                        pattern.innerHTML = `<rect width="12" height="12" fill="#140306" opacity="0.8" /><line x1="0" y1="0" x2="0" y2="12" stroke="#f43f5e" stroke-width="2" opacity="0.65" />`;
+                        defs.appendChild(pattern);
+                    }
+                    if (maskLayer._path) { maskLayer._path.setAttribute('fill', 'url(#redHatch)'); maskLayer._path.setAttribute('fill-opacity', '0.88'); }
+                }
+            }
+            setTimeout(setupPattern, 100);
+            map.on('zoomend viewreset', () => setTimeout(setupPattern, 50));
+        }
+
+        const fallbackMoscowGeo = {
+            type: "Polygon",
+            coordinates: [[
+                [37.498, 55.908], [37.585, 55.912], [37.695, 55.895], [37.838, 55.823],
+                [37.842, 55.698], [37.778, 55.625], [37.715, 55.578], [37.495, 55.335],
+                [37.205, 55.155], [36.985, 55.315], [37.195, 55.565], [37.368, 55.702],
+                [37.375, 55.845], [37.498, 55.908]
+            ]]
+        };
+        let maskLoaded = false;
+        fetch('https://nominatim.openstreetmap.org/search?q=Москва&polygon_geojson=1&format=json')
+            .then(res => res.json()).then(data => {
+                const m = data.find(i => i.geojson && (i.type === 'administrative' || i.osm_type === 'relation')) || data[0];
+                if (m && m.geojson) { maskLoaded = true; applyMaskToMap(m.geojson); }
+            }).catch(() => { if (!maskLoaded) applyMaskToMap(fallbackMoscowGeo); });
+        setTimeout(() => { if (!maskLoaded) { maskLoaded = true; applyMaskToMap(fallbackMoscowGeo); } }, 1500);
+
+        let userMarker = null, placeMarkers = [], routePolylines = [], specialMarkers = [], loadedPlaces = [];
+
+        function setUserMarker(coords, label = "Вы здесь") {
+            if (userMarker) map.removeLayer(userMarker);
+            const icon = L.divIcon({
+                className: '',
+                html: `<div class="user-pin-wrapper"><div class="user-pin-pulse"></div><div class="user-pin-core"></div></div>`,
+                iconSize: [26, 26], iconAnchor: [13, 13]
+            });
+            userMarker = L.marker(coords, { icon: icon, zIndexOffset: 3000 }).addTo(map);
+            userMarker.bindTooltip(label).openTooltip();
+        }
+
+        async function loadPublicConfig() {
+            try {
+                const res = await fetch('/api/public_config');
+                appConfig = await res.json();
+                document.getElementById('siteTitleLogo').innerHTML = escapeXml(appConfig.site_title);
+                document.getElementById('infoModalTitle').innerText = `О проекте ${appConfig.site_title}`;
+                document.getElementById('infoModalText').innerText = appConfig.welcome_text;
+            } catch (e) {}
+        }
+
+        async function loadWeather() {
+            try {
+                const res = await fetch('/api/weather');
+                const w = await res.json();
+                const pill = document.getElementById('weatherPill');
+                const sign = w.temp > 0 ? '+' : '';
+                if (w.is_bad_weather) {
+                    pill.classList.add('bad');
+                    pill.innerText = `${w.icon} ${sign}${w.temp}\u00B0C \u2022 ${w.desc}`;
+                    document.getElementById('indoorToggle').checked = true;
+                } else {
+                    pill.classList.remove('bad');
+                    pill.innerText = `${w.icon} ${sign}${w.temp}\u00B0C`;
+                }
+            } catch (e) {}
+        }
+
+        async function loadMe(applyPreferences = false) {
+            try {
+                const res = await fetch('/api/me');
+                const data = await res.json();
+                const btn = document.getElementById('accountBtn');
+                if (data.logged_in && data.user) {
+                    currentUser = data.user;
+                    currentFavIds = new Set(data.favorites.map(f => f.id));
+                    currentVisitedIds = new Set(data.visited.map(v => v.id));
+                    currentSavedRoutes = data.saved_routes;
+
+                    btn.className = 'account-btn' + (currentUser.role === 'admin' ? ' admin' : '');
+                    btn.innerText = (currentUser.role === 'admin' ? '⚡ ' : '👤 ') + currentUser.username;
+
+                    document.getElementById('userRankTitle').innerText = data.rank || 'Новичок';
+                    document.getElementById('userVisitedCount').innerText = data.visited.length;
+
+                    if (applyPreferences) {
+                        const stObj = zamoskvoretskayaStations.find(s => s.name === currentUser.home_station);
+                        if (stObj) {
+                            document.getElementById('stationSelect').value = stObj.name;
+                            currentStationName = stObj.name;
+                            userCoords = [stObj.lat, stObj.lng];
+                            setUserMarker(userCoords, `ст. ${stObj.name}`);
+                            map.flyTo(userCoords, 13);
+                        }
+                        document.getElementById('studentToggle').checked = !!currentUser.is_student;
+                        document.getElementById('pushkinToggle').checked = !!currentUser.has_pushkin;
+                    }
+                    renderProfileModalData(data.favorites, data.visited, data.saved_routes);
+                } else {
+                    currentUser = null;
+                    currentFavIds = new Set();
+                    currentVisitedIds = new Set();
+                    currentSavedRoutes = [];
+                    btn.className = 'account-btn';
+                    btn.innerText = `👤 Войти`;
+
+                    // При первом заходе на сайт — показываем приятный тоаст с предложением войти
+                    if (!localStorage.getItem('mostrack_toast_seen')) {
+                        setTimeout(() => { document.getElementById('welcomeToast').classList.add('active'); }, 1200);
+                    }
+                }
+            } catch (e) {}
+        }
+
+        function dismissWelcomeToast() {
+            document.getElementById('welcomeToast').classList.remove('active');
+            localStorage.setItem('mostrack_toast_seen', '1');
+        }
+
+        async function initApp() {
+            await loadPublicConfig();
+            await loadWeather();
+            try {
+                const res = await fetch('/api/stations');
+                const data = await res.json();
+                zamoskvoretskayaStations = data.stations;
+
+                // Наполняем селекторы 24 станциями зелёной ветки
+                const stSel = document.getElementById('stationSelect');
+                stSel.innerHTML = '';
+                zamoskvoretskayaStations.forEach((st, i) => {
+                    const opt = document.createElement('option');
+                    opt.value = st.name;
+                    opt.innerText = `${i + 1}. ст. ${st.name}`;
+                    if (st.name === "Красногвардейская") opt.selected = true;
+                    stSel.appendChild(opt);
+                });
+
+                ['profHomeStation', 'edMetro'].forEach(selId => {
+                    const el = document.getElementById(selId);
+                    el.innerHTML = '';
+                    zamoskvoretskayaStations.forEach(st => {
+                        const o = document.createElement('option');
+                        o.value = st.name; o.innerText = `ст. ${st.name}`;
+                        el.appendChild(o);
+                    });
+                });
+
+                currentStationName = "Красногвардейская";
+                setUserMarker(userCoords, "ст. Красногвардейская");
+                await loadMe(true);
+                loadPlaces();
+            } catch (e) { console.error(e); }
+        }
+
+        function onStationChanged() {
+            currentStationName = document.getElementById('stationSelect').value;
+            const found = zamoskvoretskayaStations.find(s => s.name === currentStationName);
+            if (found) {
+                userCoords = [found.lat, found.lng];
+                setUserMarker(userCoords, `ст. ${found.name}`);
+                map.flyTo(userCoords, 13);
+            }
+            loadPlaces();
+        }
+
+        function getUserLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        userCoords = [pos.coords.latitude, pos.coords.longitude];
+                        let nearest = zamoskvoretskayaStations[0], minDist = Infinity;
+                        zamoskvoretskayaStations.forEach(st => {
+                            const d = Math.hypot(st.lat - userCoords[0], st.lng - userCoords[1]);
+                            if (d < minDist) { minDist = d; nearest = st; }
+                        });
+                        document.getElementById('stationSelect').value = nearest.name;
+                        currentStationName = nearest.name;
+                        setUserMarker(userCoords, "Ваше местоположение (GPS)");
+                        map.flyTo(userCoords, 14);
+                        loadPlaces();
+                    },
+                    (err) => alert("Ошибка геолокации: " + err.message)
+                );
+            }
+        }
+
+        function setCategory(cat, btnEl) {
+            activeCategory = cat;
+            document.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
+            btnEl.classList.add('active');
+            loadPlaces();
+        }
+
+        function setPlanMode(mode, btnEl) {
+            planMode = mode;
+            planVariant = 0;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            btnEl.classList.add('active');
+        }
+
+        async function loadPlaces() {
+            const budget = document.getElementById('budgetInput').value;
+            const time = document.getElementById('timeInput').value;
+            const student = document.getElementById('studentToggle').checked;
+            const pushkin = document.getElementById('pushkinToggle').checked;
+            const indoor = document.getElementById('indoorToggle').checked;
+            const q = document.getElementById('searchInput').value;
+
+            document.getElementById('budgetValue').innerText = `${budget} ${EMOJI.ruble}`;
+            document.getElementById('timeValue').innerText = `${time} ч.`;
+
+            const url = `/api/places?budget=${budget}&time=${time}&student=${student}&pushkin=${pushkin}&indoor=${indoor}&category=${encodeURIComponent(activeCategory)}&q=${encodeURIComponent(q)}&station=${encodeURIComponent(currentStationName)}&lat=${userCoords[0]}&lng=${userCoords[1]}`;
+            const res = await fetch(url);
+            loadedPlaces = await res.json();
+            renderPlaces();
+        }
+
+        function getCategoryIcon(cat) {
+            if (cat === 'Парк') return EMOJI.tree;
+            if (cat === 'Музей') return EMOJI.museum;
+            if (cat === 'Еда') return EMOJI.food;
+            if (cat === 'Культура') return EMOJI.theatre;
+            if (cat === 'Архитектура') return EMOJI.castle;
+            return EMOJI.pin;
+        }
+
+        function clearRoutes() {
+            routePolylines.forEach(l => map.removeLayer(l));
+            specialMarkers.forEach(m => map.removeLayer(m));
+            routePolylines = []; specialMarkers = [];
+        }
+
+        function renderPlaces() {
+            placeMarkers.forEach(m => map.removeLayer(m));
+            placeMarkers = [];
+            const container = document.getElementById('cardsContainer');
+            container.innerHTML = '';
+
+            if (loadedPlaces.length === 0) {
+                container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 30px; font-size: 13.5px;">Ничего не найдено под выбранные фильтры. Попробуйте увеличить бюджет или время.</div>`;
+                return;
+            }
+
+            loadedPlaces.forEach(place => {
+                const iconChar = getCategoryIcon(place.category);
+                const pinIcon = L.divIcon({
+                    className: '',
+                    html: `<div class="place-pin">${iconChar}</div>`,
+                    iconSize: [34, 34], iconAnchor: [17, 17]
+                });
+                const marker = L.marker([place.lat, place.lng], { icon: pinIcon, zIndexOffset: 1000 }).addTo(map);
+                marker.placeId = place.id;
+                marker.on('click', () => selectPlace(place));
+                placeMarkers.push(marker);
+
+                let priceLabel = `${place.calculated_price} ${EMOJI.ruble}`;
+                if (place.pushkin_card && document.getElementById('pushkinToggle').checked) priceLabel = 'Бесплатно (Пушкинская)';
+                else if (place.calculated_price === 0) priceLabel = 'Бесплатно';
+
+                const card = document.createElement('div');
+                card.className = 'card-item';
+                const img = document.createElement('img');
+                img.className = 'card-thumb'; img.alt = place.title; img.referrerPolicy = "no-referrer"; img.src = place.image_url;
+                img.onerror = function() { this.onerror = null; this.src = getSvgPlaceholder(place.title, iconChar); };
+
+                const details = document.createElement('div');
+                details.className = 'card-details';
+                details.innerHTML = `
+                    <div class="card-heading">${currentFavIds.has(place.id) ? EMOJI.heartFull + ' ' : ''}${escapeXml(place.title)}</div>
+                    <div class="card-tags">
+                        <span class="mini-tag">${EMOJI.metro} ${escapeXml(place.metro)}</span>
+                        <span class="mini-tag tag-price">${priceLabel}</span>
+                        <span class="mini-tag tag-time">${EMOJI.time} ~${place.total_time_hours} ч.</span>
+                        ${place.pushkin_card ? `<span class="mini-tag tag-pushkin">${EMOJI.card} Пушкинская</span>` : ''}
+                        ${currentVisitedIds.has(place.id) ? `<span class="mini-tag tag-visited">✅ Посещено</span>` : ''}
+                        ${place.indoor ? `<span class="mini-tag">${EMOJI.house} В зале</span>` : ''}
+                        ${place.is_closed_today ? `<span class="mini-tag tag-closed">Выходной (Пн)</span>` : ''}
+                    </div>
+                `;
+                card.appendChild(img); card.appendChild(details);
+                card.onclick = () => selectPlace(place);
+                container.appendChild(card);
+            });
+        }
+
+        async function drawWalkPath(lat1, lng1, lat2, lng2, color) {
+            try {
+                const r = await fetch(`https://router.project-osrm.org/route/v1/foot/${lng1},${lat1};${lng2},${lat2}?overview=full&geometries=geojson`);
+                const d = await r.json();
+                if (d.routes && d.routes[0]) {
+                    const geom = d.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                    geom.push([lat2, lng2]);
+                    routePolylines.push(L.polyline(geom, { color: color, weight: 5, opacity: 0.95, dashArray: '6, 8' }).addTo(map));
+                    return;
+                }
+            } catch(e) {}
+            routePolylines.push(L.polyline([[lat1, lng1], [lat2, lng2]], { color: color, weight: 4, dashArray: '6, 6' }).addTo(map));
+        }
+
+        function updateActionButtonsUI() {
+            if (!currentSelectedPlace) return;
+            const isFav = currentFavIds.has(currentSelectedPlace.id);
+            const isVis = currentVisitedIds.has(currentSelectedPlace.id);
+
+            ['pcFavBtn', 'mobFavBtn'].forEach(id => {
+                const b = document.getElementById(id); if (!b) return;
+                b.classList.toggle('active-fav', isFav);
+                b.innerText = isFav ? `${EMOJI.heartFull} В избранном` : `${EMOJI.heartEmpty} Избранное`;
+            });
+
+            ['pcVisBtn', 'mobVisBtn'].forEach(id => {
+                const b = document.getElementById(id); if (!b) return;
+                b.classList.toggle('active-vis', isVis);
+                b.innerText = isVis ? `✅ Я здесь был(а)` : `☑️ Отметить посещение`;
+            });
+        }
+
+        async function toggleCurrentFav() {
+            if (!currentUser) { openAccountModal(); return; }
+            if (!currentSelectedPlace) return;
+            const res = await fetch('/api/favorites/toggle', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ place_id: currentSelectedPlace.id })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                await loadMe(false);
+                updateActionButtonsUI();
+                renderPlaces();
+            }
+        }
+
+        async function toggleCurrentVisited() {
+            if (!currentUser) { openAccountModal(); return; }
+            if (!currentSelectedPlace) return;
+            const res = await fetch('/api/visited/toggle', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ place_id: currentSelectedPlace.id })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                await loadMe(false);
+                updateActionButtonsUI();
+                renderPlaces();
+            }
+        }
+
+        async function loadReviews(placeId) {
+            try {
+                const res = await fetch(`/api/places/${placeId}/reviews`);
+                const revs = await res.json();
+                const listEl = document.getElementById('reviewsList');
+                if (!revs || revs.length === 0) {
+                    listEl.innerHTML = `<div style="color:var(--text-muted); font-size:12px; padding:6px 0;">Пока нет отзывов. Будьте первыми!</div>`;
+                    document.getElementById('revRatingBadge').innerText = '⭐ Новый';
+                    return;
+                }
+                const avg = (revs.reduce((a, b) => a + b.rating, 0) / revs.length).toFixed(1);
+                document.getElementById('revRatingBadge').innerText = `⭐ ${avg} (${revs.length})`;
+
+                listEl.innerHTML = revs.map(r => `
+                    <div class="rev-item">
+                        <div style="display:flex; justify-content:space-between; color:#fff; font-weight:700;">
+                            <span>${escapeXml(r.display_name || r.username)}</span>
+                            <span style="color:#f59e0b;">${'⭐'.repeat(r.rating)}</span>
+                        </div>
+                        <div style="color:#cbd5e1; margin-top:2px;">${escapeXml(r.comment)}</div>
+                    </div>
+                `).join('');
+            } catch (e) {}
+        }
+
+        async function submitReview() {
+            if (!currentUser) { openAccountModal(); return; }
+            if (!currentSelectedPlace) return;
+            const rating = document.getElementById('newRevRating').value;
+            const comment = document.getElementById('newRevText').value.trim();
+            if (!comment) return alert('Напишите текст отзыва');
+
+            const res = await fetch(`/api/places/${currentSelectedPlace.id}/reviews`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rating, comment })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                document.getElementById('newRevText').value = '';
+                await loadReviews(currentSelectedPlace.id);
+            } else {
+                alert(data.message);
+            }
+        }
+
+        async function selectPlace(place) {
+            currentSelectedPlace = place;
+            clearRoutes();
+            placeMarkers.forEach(m => { if (m.placeId === place.id) m.addTo(map); else map.removeLayer(m); });
+
+            const startSt = zamoskvoretskayaStations.find(s => s.name === currentStationName) || zamoskvoretskayaStations[22];
+            const destSt = zamoskvoretskayaStations.find(s => s.name === place.metro) || startSt;
+            const mIcon = L.divIcon({ className: '', html: `<div class="train-icon">${EMOJI.metro}</div>`, iconSize: [32, 32], iconAnchor: [16, 16] });
+
+            const entryM = L.marker([startSt.lat, startSt.lng], { icon: mIcon, zIndexOffset: 2500 }).addTo(map);
+            entryM.bindTooltip(`Посадка: ст. «${startSt.name}»`).openTooltip();
+            specialMarkers.push(entryM);
+
+            if (startSt.name !== destSt.name) {
+                const exitM = L.marker([destSt.lat, destSt.lng], { icon: mIcon, zIndexOffset: 2500 }).addTo(map);
+                exitM.bindTooltip(`Выход: ст. «${destSt.name}»`).openTooltip();
+                specialMarkers.push(exitM);
+            }
+
+            // 1. Синий пунктир (от реальных GPS-координат до станции входа)
+            if (Math.hypot(userCoords[0] - startSt.lat, userCoords[1] - startSt.lng) > 0.002) {
+                await drawWalkPath(userCoords[0], userCoords[1], startSt.lat, startSt.lng, '#38bdf8');
+            }
+
+            // 2. Зелёная линия метро
+            if (place.metro_segments && place.metro_segments.length > 0) {
+                place.metro_segments.forEach(seg => {
+                    routePolylines.push(L.polyline(seg.coords, { color: seg.color, weight: 6, opacity: 0.95, dashArray: '10, 8' }).addTo(map));
+                });
+            }
+
+            // 3. Красный пеший пунктир от станции прибытия до входа
+            await drawWalkPath(destSt.lat, destSt.lng, place.lat, place.lng, '#f43f5e');
+
+            const isMobile = window.innerWidth <= 768;
+            const bounds = L.latLngBounds([userCoords, [startSt.lat, startSt.lng], [destSt.lat, destSt.lng], [place.lat, place.lng]]);
+            map.fitBounds(bounds, { paddingTopLeft: [30, 30], paddingBottomRight: [30, isMobile ? Math.round(window.innerHeight * 0.46) : 360], animate: true });
+
+            let ticketDesc = `${place.calculated_price} ${EMOJI.ruble}`;
+            if (place.pushkin_card) ticketDesc = `Бесплатно по Пушкинской карте (стандарт: ${place.price_adult} ${EMOJI.ruble}, льготный: ${place.price_student} ${EMOJI.ruble})`;
+            else if (place.has_student_discount) ticketDesc = `${place.price_student} ${EMOJI.ruble} (льготный) / ${place.price_adult} ${EMOJI.ruble} (взрослый)`;
+            else if (place.price_adult === 0) ticketDesc = `Вход свободный (0 ${EMOJI.ruble})`;
+
+            const mf = appConfig.metro_fare || 87;
+            const bf = appConfig.bus_fare || 80;
+
+            const panelImg = document.getElementById('panelImg');
+            panelImg.onerror = function() { this.onerror = null; this.src = getSvgPlaceholder(place.title, getCategoryIcon(place.category)); };
+            panelImg.src = place.image_url;
+            document.getElementById('panelTitle').innerText = place.title;
+            document.getElementById('panelDesc').innerText = place.description;
+            document.getElementById('panelTicket').innerText = ticketDesc;
+            document.getElementById('metroNavText').innerHTML = place.metro_instructions;
+            document.getElementById('walkCost').innerText = place.transport_cost === 0 ? `Пешком (0 ${EMOJI.ruble})` : `Метро ${mf} ${EMOJI.ruble}`;
+            document.getElementById('busCost').innerText = place.transport_cost === 0 ? `Автобус ${bf} ${EMOJI.ruble}` : `Метро + Автобус ${mf + bf} ${EMOJI.ruble}`;
+            document.getElementById('panelWalkInfo').innerText = place.walk_route_info;
+            document.getElementById('panelBusInfo').innerText = `${place.bus_route_info} (Маршруты: ${place.bus_number})`;
+
+            updateActionButtonsUI();
+            await loadReviews(place.id);
+
+            document.getElementById('pcDayPlanContent').style.display = 'none';
+            document.getElementById('pcSinglePlaceContent').style.display = 'block';
+            document.getElementById('bottomPanel').classList.add('active');
+
+            if (isMobile) {
+                const mobImg = document.getElementById('mobPanelImg');
+                mobImg.onerror = function() { this.onerror = null; this.src = getSvgPlaceholder(place.title, getCategoryIcon(place.category)); };
+                mobImg.src = place.image_url;
+                document.getElementById('mobPanelTitle').innerText = place.title;
+                document.getElementById('mobPanelDesc').innerText = place.description;
+                document.getElementById('mobPanelTicket').innerText = ticketDesc;
+                document.getElementById('mobMetroNavText').innerHTML = place.metro_instructions;
+                document.getElementById('mobWalkCost').innerText = place.transport_cost === 0 ? `Пешком (0 ${EMOJI.ruble})` : `Метро ${mf} ${EMOJI.ruble}`;
+                document.getElementById('mobBusCost').innerText = place.transport_cost === 0 ? `Автобус ${bf} ${EMOJI.ruble}` : `Метро + Автобус ${mf + bf} ${EMOJI.ruble}`;
+                document.getElementById('mobPanelWalkInfo').innerText = place.walk_route_info;
+                document.getElementById('mobPanelBusInfo').innerText = `${place.bus_route_info} (Автобусы: ${place.bus_number})`;
+
+                const sb = document.getElementById('sidebar');
+                document.getElementById('mainSheetContent').style.display = 'none';
+                document.getElementById('mobDayPlanContent').style.display = 'none';
+                document.getElementById('mobSinglePlaceContent').style.display = 'block';
+                document.getElementById('mobileDetailContainer').classList.add('active');
+                sb.classList.remove('sheet-expanded');
+                sb.classList.add('sheet-details');
+            }
+        }
+
+        // =====================================================================
+        // МНОГОВАРИАНТНЫЙ AI-КОНСТРУКТОР ДНЯ
+        // =====================================================================
+        async function generateDayPlan(nextVariant = false) {
+            const budget = document.getElementById('budgetInput').value;
+            const time = document.getElementById('timeInput').value;
+            const student = document.getElementById('studentToggle').checked;
+            const pushkin = document.getElementById('pushkinToggle').checked;
+            const indoor = document.getElementById('indoorToggle').checked;
+
+            if (nextVariant) planVariant++;
+            else planVariant = 0;
+
+            const url = `/api/plan_day?budget=${budget}&time=${time}&student=${student}&pushkin=${pushkin}&indoor=${indoor}&station=${encodeURIComponent(currentStationName)}&lat=${userCoords[0]}&lng=${userCoords[1]}&mode=${encodeURIComponent(planMode)}&variant=${planVariant}`;
+            const res = await fetch(url);
+            const plan = await res.json();
+
+            if (!plan.ok) { alert(plan.message); return; }
+            renderDayPlanOnMapAndPanel(plan);
+        }
+
+        async function renderDayPlanOnMapAndPanel(plan) {
+            currentDayPlan = plan;
+            clearRoutes();
+            placeMarkers.forEach(m => map.removeLayer(m));
+
+            const allCoords = [userCoords];
+            const startSt = zamoskvoretskayaStations.find(s => s.name === plan.start_station);
+            if (startSt && Math.hypot(userCoords[0] - startSt.lat, userCoords[1] - startSt.lng) > 0.002) {
+                await drawWalkPath(userCoords[0], userCoords[1], startSt.lat, startSt.lng, '#38bdf8');
+            }
+
+            for (const stop of plan.stops) {
+                const pinIcon = L.divIcon({ className: '', html: `<div class="step-pin">${stop.step}</div>`, iconSize: [34, 34], iconAnchor: [17, 17] });
+                const m = L.marker([stop.lat, stop.lng], { icon: pinIcon, zIndexOffset: 2600 }).addTo(map);
+                m.bindTooltip(`${stop.step}. ${stop.title}`).openTooltip();
+                specialMarkers.push(m);
+                allCoords.push([stop.lat, stop.lng]);
+
+                if (stop.metro_segments && stop.metro_segments.length > 0) {
+                    stop.metro_segments.forEach(seg => {
+                        routePolylines.push(L.polyline(seg.coords, { color: seg.color, weight: 6, opacity: 0.95, dashArray: '10, 8' }).addTo(map));
+                    });
+                }
+                const stDest = zamoskvoretskayaStations.find(s => s.name === stop.to_station);
+                if (stDest) {
+                    allCoords.push([stDest.lat, stDest.lng]);
+                    await drawWalkPath(stDest.lat, stDest.lng, stop.lat, stop.lng, '#f43f5e');
+                }
+            }
+
+            const isMobile = window.innerWidth <= 768;
+            map.fitBounds(L.latLngBounds(allCoords), { paddingTopLeft: [35, 35], paddingBottomRight: [35, isMobile ? Math.round(window.innerHeight * 0.46) : 340], animate: true });
+
+            const stopsHtml = plan.stops.map(st => `
+                <div class="day-stop-card">
+                    <div style="font-size: 14px; font-weight: 800; color: #fff;"><span class="step-badge">${st.step}</span> ${escapeXml(st.title)}</div>
+                    <div style="font-size: 12px; color: #38bdf8; font-weight: 600;">${EMOJI.metro} ст. «${escapeXml(st.metro)}» (${st.stops_count === 0 ? 'пешком на месте' : `${st.stops_count} ост. на метро`})</div>
+                    <div style="font-size: 12px; color: #cbd5e1;">${EMOJI.time} В пути: ~${st.metro_min + st.walk_min} мин | Осмотр: ~${st.visit_min} мин</div>
+                    <div style="font-size: 12px; color: #f43f5e; font-weight: 700;">Вход: ${st.price === 0 ? (st.pushkin_card ? '0 ₽ (Пушкинская)' : 'Бесплатно') : `${st.price} ${EMOJI.ruble}`}</div>
+                </div>
+            `).join('');
+
+            const planHtml = `
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                    <div class="panel-title" style="font-size:20px;">${EMOJI.spark} Маршрут дня: Вариант ${plan.variant_index} из ${plan.total_variants}</div>
+                    <button class="btn-cyan" onclick="generateDayPlan(true)">🔄 Другой маршрут</button>
+                </div>
+                <div class="day-plan-summary">
+                    <span class="summary-pill">${EMOJI.time} ~${plan.total_time_hours} ч.</span>
+                    <span class="summary-pill">Вход: ${plan.total_tickets} ${EMOJI.ruble}</span>
+                    <span class="summary-pill">Метро: ${plan.total_transport} ${EMOJI.ruble}</span>
+                    ${plan.total_saved > 0 ? `<span class="summary-pill" style="border-color:#10b981; color:#6ee7b7;">Выгода: ${plan.total_saved} ${EMOJI.ruble}</span>` : ''}
+                    <button class="save-route-btn" onclick="saveCurrentDayPlan()">💾 Сохранить</button>
+                </div>
+                <div class="day-stops-grid">${stopsHtml}</div>
+            `;
+
+            document.getElementById('pcSinglePlaceContent').style.display = 'none';
+            document.getElementById('pcDayPlanContent').innerHTML = planHtml;
+            document.getElementById('pcDayPlanContent').style.display = 'block';
+            document.getElementById('bottomPanel').classList.add('active');
+
+            if (isMobile) {
+                const sb = document.getElementById('sidebar');
+                document.getElementById('mainSheetContent').style.display = 'none';
+                document.getElementById('mobSinglePlaceContent').style.display = 'none';
+                document.getElementById('mobDayPlanContent').innerHTML = planHtml;
+                document.getElementById('mobDayPlanContent').style.display = 'block';
+                document.getElementById('mobileDetailContainer').classList.add('active');
+                sb.classList.remove('sheet-expanded');
+                sb.classList.add('sheet-details');
+            }
+        }
+
+        async function saveCurrentDayPlan() {
+            if (!currentUser) { openAccountModal(); return; }
+            if (!currentDayPlan) return;
+            const title = `Маршрут по зелёной ветке от м. ${currentDayPlan.start_station} (${currentDayPlan.stops.length} места)`;
+            const res = await fetch('/api/routes/save', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: title, start_station: currentDayPlan.start_station,
+                    stops: currentDayPlan.stops, total_time: currentDayPlan.total_time_hours,
+                    total_cost: currentDayPlan.total_cost
+                })
+            });
+            const data = await res.json();
+            alert(data.message);
+            await loadMe(false);
+        }
+
+        // =====================================================================
+        // ЛИЧНЫЙ КАБИНЕТ И СИСТЕМА АККАУНТОВ
+        // =====================================================================
+        function openAccountModal() {
+            if (currentUser) {
+                document.getElementById('authSection').style.display = 'none';
+                document.getElementById('profileSection').style.display = 'block';
+                document.getElementById('accModalTitle').innerText = `${EMOJI.user} Профиль: ${currentUser.display_name}`;
+                document.getElementById('adminEntryWrap').style.display = (currentUser.role === 'admin') ? 'block' : 'none';
+                document.getElementById('profDisplayName').value = currentUser.display_name;
+                document.getElementById('profHomeStation').value = currentUser.home_station;
+                document.getElementById('profIsStudent').checked = !!currentUser.is_student;
+                document.getElementById('profHasPushkin').checked = !!currentUser.has_pushkin;
+                switchProfileTab('prof');
+            } else {
+                document.getElementById('authSection').style.display = 'block';
+                document.getElementById('profileSection').style.display = 'none';
+                document.getElementById('accModalTitle').innerText = `${EMOJI.user} Вход в аккаунт`;
+            }
+            document.getElementById('accountModal').classList.add('active');
+        }
+
+        function closeAccountModal() { document.getElementById('accountModal').classList.remove('active'); }
+
+        function switchAuthTab(mode) {
+            document.getElementById('tabLoginBtn').classList.toggle('active', mode === 'login');
+            document.getElementById('tabRegBtn').classList.toggle('active', mode === 'reg');
+            document.getElementById('loginForm').style.display = (mode === 'login') ? 'block' : 'none';
+            document.getElementById('regForm').style.display = (mode === 'reg') ? 'block' : 'none';
+        }
+
+        function switchProfileTab(tab) {
+            ['pTabProf', 'pTabFavs', 'pTabVisited', 'pTabRoutes'].forEach(id => document.getElementById(id).classList.remove('active'));
+            ['profTabContent', 'favsTabContent', 'visitedTabContent', 'routesTabContent'].forEach(id => document.getElementById(id).style.display = 'none');
+
+            if (tab === 'prof') { document.getElementById('pTabProf').classList.add('active'); document.getElementById('profTabContent').style.display = 'block'; }
+            if (tab === 'favs') { document.getElementById('pTabFavs').classList.add('active'); document.getElementById('favsTabContent').style.display = 'block'; }
+            if (tab === 'visited') { document.getElementById('pTabVisited').classList.add('active'); document.getElementById('visitedTabContent').style.display = 'block'; }
+            if (tab === 'routes') { document.getElementById('pTabRoutes').classList.add('active'); document.getElementById('routesTabContent').style.display = 'block'; }
+        }
+
+        function renderProfileModalData(favs, visited, routes) {
+            const favDiv = document.getElementById('favsTabContent');
+            favDiv.innerHTML = (!favs || favs.length === 0)
+                ? `<div style="color:var(--text-muted); padding:20px; text-align:center;">Пока нет избранных мест.</div>`
+                : favs.map(f => `
+                    <div class="admin-list-item">
+                        <div>
+                            <div style="font-weight:700; font-size:14px;">${escapeXml(f.title)}</div>
+                            <div style="font-size:12px; color:var(--user-cyan);">${EMOJI.metro} ${escapeXml(f.metro)}</div>
+                        </div>
+                        <button class="btn-secondary" onclick="jumpToFavPlace(${f.id})">Открыть</button>
+                    </div>
+                `).join('');
+
+            const visDiv = document.getElementById('visitedTabContent');
+            visDiv.innerHTML = (!visited || visited.length === 0)
+                ? `<div style="color:var(--text-muted); padding:20px; text-align:center;">Вы ещё не отметили ни одного места. Нажмите «✅ Я здесь был(а)» в карточке места!</div>`
+                : visited.map(v => `
+                    <div class="admin-list-item">
+                        <div>
+                            <div style="font-weight:700; font-size:14px;">✅ ${escapeXml(v.title)}</div>
+                            <div style="font-size:12px; color:var(--user-cyan);">${EMOJI.metro} ${escapeXml(v.metro)}</div>
+                        </div>
+                        <button class="btn-secondary" onclick="jumpToFavPlace(${v.id})">Открыть</button>
+                    </div>
+                `).join('');
+
+            const rDiv = document.getElementById('routesTabContent');
+            rDiv.innerHTML = (!routes || routes.length === 0)
+                ? `<div style="color:var(--text-muted); padding:20px; text-align:center;">Нет сохранённых маршрутов.</div>`
+                : routes.map((r, i) => `
+                    <div class="admin-list-item">
+                        <div>
+                            <div style="font-weight:700; font-size:13.5px;">${escapeXml(r.title)}</div>
+                            <div style="font-size:12px; color:#94a3b8;">${EMOJI.time} ~${r.total_time} ч. | Вход: ${r.total_cost} ${EMOJI.ruble}</div>
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn-green" onclick="loadSavedRoute(${i})">Показать</button>
+                            <button class="btn-danger" onclick="deleteSavedRoute(${r.id})">&#10005;</button>
+                        </div>
+                    </div>
+                `).join('');
+        }
+
+        function jumpToFavPlace(placeId) {
+            closeAccountModal();
+            const found = loadedPlaces.find(p => p.id === placeId);
+            if (found) selectPlace(found);
+            else alert("Место временно не попадает в активные фильтры бюджета/времени.");
+        }
+
+        function loadSavedRoute(idx) {
+            const r = currentSavedRoutes[idx];
+            if (!r) return;
+            closeAccountModal();
+            renderDayPlanOnMapAndPanel({
+                ok: true, mode: 'custom', variant_index: 1, total_variants: 1,
+                start_station: r.start_station, stops: r.stops,
+                total_time_hours: r.total_time, total_tickets: r.total_cost, total_transport: 0,
+                total_cost: r.total_cost, total_saved: 0
+            });
+        }
+
+        async function deleteSavedRoute(routeId) {
+            await fetch(`/api/routes/${routeId}`, { method: 'DELETE' });
+            await loadMe(false);
+        }
+
+        async function doLogin() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const res = await fetch('/api/login', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+            if (!data.ok) { alert(data.message); return; }
+            await loadMe(true);
+            loadPlaces();
+            openAccountModal();
+        }
+
+        async function doRegister() {
+            const username = document.getElementById('regUsername').value;
+            const display_name = document.getElementById('regDisplayName').value;
+            const password = document.getElementById('regPassword').value;
+            const res = await fetch('/api/register', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, display_name, password })
+            });
+            const data = await res.json();
+            if (!data.ok) { alert(data.message); return; }
+            await loadMe(true);
+            loadPlaces();
+            openAccountModal();
+        }
+
+        async function doLogout() {
+            await fetch('/api/logout', { method: 'POST' });
+            await loadMe(false);
+            closeAccountModal();
+            loadPlaces();
+        }
+
+        async function saveProfile() {
+            const res = await fetch('/api/profile/update', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    display_name: document.getElementById('profDisplayName').value,
+                    home_station: document.getElementById('profHomeStation').value,
+                    is_student: document.getElementById('profIsStudent').checked,
+                    has_pushkin: document.getElementById('profHasPushkin').checked
+                })
+            });
+            const data = await res.json();
+            alert(data.message);
+            await loadMe(true);
+            loadPlaces();
+        }
+
+        // =====================================================================
+        // ПАНЕЛЬ РАЗРАБОТЧИКА (CMS)
+        // =====================================================================
+        async function openAdminPanel() {
+            closeAccountModal();
+            document.getElementById('adminModal').classList.add('active');
+            await loadAdminPlaces();
+            await loadAdminSettings();
+        }
+        function closeAdminPanel() { document.getElementById('adminModal').classList.remove('active'); }
+
+        function switchAdminTab(tab) {
+            ['aTabPlaces', 'aTabMod', 'aTabSettings', 'aTabSql'].forEach(id => document.getElementById(id).classList.remove('active'));
+            ['adminPlacesTab', 'adminModTab', 'adminSettingsTab', 'adminSqlTab'].forEach(id => document.getElementById(id).style.display = 'none');
+
+            if (tab === 'places') { document.getElementById('aTabPlaces').classList.add('active'); document.getElementById('adminPlacesTab').style.display = 'block'; }
+            if (tab === 'mod') { document.getElementById('aTabMod').classList.add('active'); document.getElementById('adminModTab').style.display = 'block'; }
+            if (tab === 'settings') { document.getElementById('aTabSettings').classList.add('active'); document.getElementById('adminSettingsTab').style.display = 'block'; }
+            if (tab === 'sql') { document.getElementById('aTabSql').classList.add('active'); document.getElementById('adminSqlTab').style.display = 'block'; loadSqlTable('places'); }
+        }
+
+        async function loadAdminPlaces() {
+            const res = await fetch('/api/admin/places');
+            adminPlacesCache = await res.json();
+            renderAdminPlacesList();
+            renderModerationList();
+        }
+
+        function renderAdminPlacesList() {
+            const q = document.getElementById('adminSearch').value.toLowerCase();
+            const approved = adminPlacesCache.filter(p => p.status === 'approved' && (`${p.title} ${p.metro}`).toLowerCase().includes(q));
+            document.getElementById('adminTotalPlaces').innerText = approved.length;
+            document.getElementById('adminPlacesList').innerHTML = approved.map(p => `
+                <div class="admin-list-item">
+                    <div>
+                        <div style="font-weight:700; font-size:14px;">${escapeXml(p.title)}</div>
+                        <div style="font-size:12px; color:#94a3b8;">${EMOJI.metro} ${escapeXml(p.metro)} | Билет: ${p.price_adult} ${EMOJI.ruble} ${p.pushkin_card ? '• 💳 Пушкинская' : ''}</div>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn-secondary" onclick="openPlaceEditor(${p.id})">&#9999;&#65039; Изм.</button>
+                        <button class="btn-danger" onclick="deleteAdminPlace(${p.id})">&#128465;&#65039;</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderModerationList() {
+            const pending = adminPlacesCache.filter(p => p.status === 'pending');
+            document.getElementById('pendingBadge').innerText = pending.length;
+            const modDiv = document.getElementById('adminModTab');
+            if (pending.length === 0) {
+                modDiv.innerHTML = `<div style="color:var(--text-muted); padding:24px; text-align:center;">Новых заявок на модерацию нет.</div>`;
+                return;
+            }
+            modDiv.innerHTML = pending.map(p => `
+                <div class="admin-list-item">
+                    <div>
+                        <div style="font-weight:700; font-size:14px;">${escapeXml(p.title)} <span style="color:#f43f5e;">(от @${escapeXml(p.creator_name || 'user')})</span></div>
+                        <div style="font-size:12px; color:#94a3b8;">${EMOJI.metro} ${escapeXml(p.metro)} | ${escapeXml(p.description)}</div>
+                    </div>
+                    <div style="display:flex; gap:6px; flex-shrink:0;">
+                        <button class="btn-green" onclick="approvePlace(${p.id})">&#9989; Одобрить</button>
+                        <button class="btn-secondary" onclick="openPlaceEditor(${p.id})">&#9999;&#65039;</button>
+                        <button class="btn-danger" onclick="deleteAdminPlace(${p.id})">&#10060;</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function approvePlace(pid) {
+            await fetch(`/api/admin/places/${pid}/approve`, { method: 'POST' });
+            await loadAdminPlaces();
+            loadPlaces();
+        }
+
+        async function deleteAdminPlace(pid) {
+            if (!confirm('Удалить это место из базы?')) return;
+            await fetch(`/api/admin/places/${pid}`, { method: 'DELETE' });
+            await loadAdminPlaces();
+            loadPlaces();
+        }
+
+        function openPlaceEditorForSuggest() {
+            closeAccountModal();
+            editorMode = 'user_suggest';
+            editingPlaceId = null;
+            document.getElementById('editorModalTitle').innerText = 'Предложить место на Замоскворецкой линии';
+            document.getElementById('edSubmitBtn').innerText = 'Отправить на модерацию разработчику';
+            clearEditorFields();
+            document.getElementById('editorModal').classList.add('active');
+        }
+
+        function openPlaceEditor(placeId) {
+            editingPlaceId = placeId;
+            if (placeId === null) {
+                editorMode = 'admin_create';
+                document.getElementById('editorModalTitle').innerText = 'Добавить место (Разработчик)';
+                document.getElementById('edSubmitBtn').innerText = 'Добавить в базу';
+                clearEditorFields();
+            } else {
+                editorMode = 'admin_edit';
+                const p = adminPlacesCache.find(x => x.id === placeId);
+                document.getElementById('editorModalTitle').innerText = `Редактирование: ${p.title}`;
+                document.getElementById('edSubmitBtn').innerText = 'Сохранить изменения';
+                document.getElementById('edTitle').value = p.title;
+                document.getElementById('edCategory').value = p.category;
+                document.getElementById('edMetro').value = p.metro;
+                document.getElementById('edLat').value = p.lat;
+                document.getElementById('edLng').value = p.lng;
+                document.getElementById('edTime').value = p.time_needed;
+                document.getElementById('edPriceAdult').value = p.price_adult;
+                document.getElementById('edPriceStudent').value = p.price_student;
+                document.getElementById('edPushkin').checked = !!p.pushkin_card;
+                document.getElementById('edIndoor').checked = !!p.indoor;
+                document.getElementById('edClosedMon').checked = (p.closed_weekday === 0);
+                document.getElementById('edImageUrl').value = p.image_url;
+                document.getElementById('edDesc').value = p.description;
+                document.getElementById('edWalkInfo').value = p.walk_route_info;
+                document.getElementById('edBusInfo').value = p.bus_route_info;
+                updateEditorImgPreview();
+            }
+            document.getElementById('editorModal').classList.add('active');
+        }
+
+        function clearEditorFields() {
+            document.getElementById('edTitle').value = '';
+            document.getElementById('edLat').value = userCoords[0].toFixed(4);
+            document.getElementById('edLng').value = userCoords[1].toFixed(4);
+            document.getElementById('edTime').value = '0.5';
+            document.getElementById('edPriceAdult').value = '0';
+            document.getElementById('edPriceStudent').value = '0';
+            document.getElementById('edPushkin').checked = false;
+            document.getElementById('edIndoor').checked = false;
+            document.getElementById('edClosedMon').checked = false;
+            document.getElementById('edImageUrl').value = '';
+            document.getElementById('edDesc').value = '';
+            document.getElementById('edWalkInfo').value = '';
+            document.getElementById('edBusInfo').value = '';
+            updateEditorImgPreview();
+        }
+
+        function closeEditorModal() { document.getElementById('editorModal').classList.remove('active'); }
+
+        function updateEditorImgPreview() {
+            const url = document.getElementById('edImageUrl').value.trim();
+            const img = document.getElementById('edImgPreview');
+            if (url) { img.src = url; img.style.display = 'block'; } else { img.style.display = 'none'; }
+        }
+
+        async function uploadPlacePhoto(input) {
+            if (!input.files || !input.files[0]) return;
+            const fd = new FormData();
+            fd.append('file', input.files[0]);
+            const res = await fetch('/api/upload_photo', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.ok) {
+                document.getElementById('edImageUrl').value = data.url;
+                updateEditorImgPreview();
+            } else { alert(data.message); }
+        }
+
+        async function submitEditorForm() {
+            const payload = {
+                title: document.getElementById('edTitle').value,
+                category: document.getElementById('edCategory').value,
+                metro: document.getElementById('edMetro').value,
+                lat: parseFloat(document.getElementById('edLat').value),
+                lng: parseFloat(document.getElementById('edLng').value),
+                time_needed: parseFloat(document.getElementById('edTime').value),
+                price_adult: parseInt(document.getElementById('edPriceAdult').value || 0),
+                price_student: parseInt(document.getElementById('edPriceStudent').value || 0),
+                pushkin_card: document.getElementById('edPushkin').checked,
+                indoor: document.getElementById('edIndoor').checked,
+                closed_weekday: document.getElementById('edClosedMon').checked ? 0 : -1,
+                image_url: document.getElementById('edImageUrl').value,
+                description: document.getElementById('edDesc').value,
+                walk_route_info: document.getElementById('edWalkInfo').value,
+                bus_route_info: document.getElementById('edBusInfo').value,
+                bus_number: 'Автобус / Пешком',
+                status: 'approved'
+            };
+
+            let url = '/api/places/suggest', method = 'POST';
+            if (editorMode === 'admin_edit' && editingPlaceId) {
+                url = `/api/admin/places/${editingPlaceId}`;
+                method = 'PUT';
+            }
+
+            const res = await fetch(url, {
+                method: method, headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            alert(data.message);
+            closeEditorModal();
+            if (currentUser && currentUser.role === 'admin' && document.getElementById('adminModal').classList.contains('active')) {
+                await loadAdminPlaces();
+            }
+            loadPlaces();
+        }
+
+        async function loadAdminSettings() {
+            const res = await fetch('/api/admin/settings');
+            const rows = await res.json();
+            const mapS = {};
+            rows.forEach(r => mapS[r.key] = r.value);
+            document.getElementById('setMetroFare').value = mapS.metro_fare || 87;
+            document.getElementById('setBusFare').value = mapS.bus_fare || 80;
+            document.getElementById('setWeatherSource').value = mapS.weather_source || 'open_meteo';
+            document.getElementById('setSiteTitle').value = mapS.site_title || 'MosTrack';
+            document.getElementById('setWelcomeText').value = mapS.welcome_text || '';
+        }
+
+        async function saveAdminSettings() {
+            const res = await fetch('/api/admin/settings', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    metro_fare: document.getElementById('setMetroFare').value,
+                    bus_fare: document.getElementById('setBusFare').value,
+                    weather_source: document.getElementById('setWeatherSource').value,
+                    site_title: document.getElementById('setSiteTitle').value,
+                    welcome_text: document.getElementById('setWelcomeText').value
+                })
+            });
+            const data = await res.json();
+            alert(data.message);
+            await loadPublicConfig();
+            await loadWeather();
+            loadPlaces();
+        }
+
+        async function loadSqlTable(tbl) {
+            const res = await fetch(`/api/admin/sql/${tbl}`);
+            const data = await res.json();
+            const wrap = document.getElementById('sqlTableWrap');
+            if (!data.rows || data.rows.length === 0) {
+                wrap.innerHTML = `<div style="padding:20px; text-align:center; color:#94a3b8;">Таблица ${tbl} пуста.</div>`;
+                return;
+            }
+            let ths = data.columns.map(c => `<th>${escapeXml(c)}</th>`).join('');
+            if (tbl === 'users') ths += `<th>Роль</th>`;
+
+            let trs = data.rows.map(row => {
+                let tds = data.columns.map(c => `<td title="${escapeXml(String(row[c]))}">${escapeXml(String(row[c]))}</td>`).join('');
+                if (tbl === 'users') {
+                    const nextR = row.role === 'admin' ? 'user' : 'admin';
+                    tds += `<td><button class="btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="toggleUserRole(${row.id}, '${nextR}')">Сделать ${nextR}</button></td>`;
+                }
+                return `<tr>${tds}</tr>`;
+            }).join('');
+
+            wrap.innerHTML = `<table class="sql-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+        }
+
+        async function toggleUserRole(uid, newRole) {
+            const res = await fetch(`/api/admin/users/${uid}/role`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role: newRole })
+            });
+            const d = await res.json();
+            if (!d.ok) alert(d.message);
+            loadSqlTable('users');
+        }
+
+        function closeMobileDetail() {
+            const sb = document.getElementById('sidebar');
+            document.getElementById('mobileDetailContainer').classList.remove('active');
+            document.getElementById('mainSheetContent').style.display = 'flex';
+            sb.classList.remove('sheet-details');
+            sb.classList.add('sheet-expanded');
+            clearRoutes(); renderPlaces();
+        }
+
+        function closePanel() {
+            document.getElementById('bottomPanel').classList.remove('active');
+            clearRoutes(); renderPlaces();
+        }
+
+        document.getElementById('budgetInput').addEventListener('input', loadPlaces);
+        document.getElementById('timeInput').addEventListener('input', loadPlaces);
+        document.getElementById('studentToggle').addEventListener('change', loadPlaces);
+        document.getElementById('pushkinToggle').addEventListener('change', loadPlaces);
+        document.getElementById('indoorToggle').addEventListener('change', loadPlaces);
+        document.getElementById('searchInput').addEventListener('input', loadPlaces);
+
+        initApp();
+    </script>
+</body>
+</html>
